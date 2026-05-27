@@ -153,7 +153,49 @@ class AppError(Exception):
 
 ---
 
-## 11. 일반 엔지니어링 원칙
+## 11. Git Workflow
+
+### 브랜치 전략 (GitHub Flow)
+
+- `main`은 항상 배포 가능한 상태. **`main`에 직접 push 금지**(init 커밋 제외).
+  모든 변경은 PR을 통해 머지한다.
+- 작업 브랜치는 접두사 + kebab-case 설명을 쓴다:
+  - `feat/<설명>` — 새 기능
+  - `fix/<설명>` — 버그 수정
+  - `chore/<설명>` — 도구·설정·잡일
+  - `docs/<설명>` — 문서만 변경
+  - `refactor/<설명>` — 동작 불변 리팩터
+  - `test/<설명>` — 테스트 추가/수정
+- 머지 후 브랜치는 삭제한다.
+- 머지 방식은 **squash merge** (PR 1개 = 커밋 1개).
+
+### 커밋 메시지 (Conventional Commits)
+
+```
+<type>(<scope>): <짧은 제목, 72자 이내, 한국어 또는 영어>
+
+<본문, 선택>
+
+<footer, 선택 (BREAKING CHANGE, Refs 등)>
+```
+
+- `<type>`: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`
+- `<scope>`(선택): `api`, `web`, `worker`, `infra`, `deps` 등
+- 제목은 명령형 현재시제 ("add X", "fix Y").
+- 호환성 깨는 변경은 footer에 `BREAKING CHANGE:` 명시.
+
+### 버전 / 릴리즈
+
+- [Semantic Versioning](https://semver.org)을 따른다: `MAJOR.MINOR.PATCH`.
+- 첫 end-to-end 동작 전까지는 `v0.x.y` 프리릴리즈.
+- 태그는 수동: `git tag -a v0.1.0 -m "..." && git push origin v0.1.0`.
+- 태그 시점에 [`CHANGELOG.md`](./CHANGELOG.md)에 한 섹션 추가
+  ([Keep a Changelog](https://keepachangelog.com/) 포맷).
+- 릴리즈 자동화(Release Please 등)는 현재 도입하지 않는다.
+
+---
+
+## 12. 일반 엔지니어링 원칙
 
 - 작고 초점이 분명한 변경을 선호한다.
 - 기존 아키텍처·네이밍·포맷·파일 구조를 보존한다. 무관한 리팩터·대량 포맷·파일 이동·
@@ -165,7 +207,7 @@ class AppError(Exception):
 
 ---
 
-## 12. Safety (파괴적 작업)
+## 13. Safety (파괴적 작업)
 
 다음은 사용자 승인 없이 수행 금지:
 
@@ -179,7 +221,7 @@ class AppError(Exception):
 
 ---
 
-## 13. 의존성 / 환경
+## 14. 의존성 / 환경
 
 - 리포지토리의 패키지 매니저(`uv` for Python, `pnpm` for Node)와 lockfile을 존중한다.
 - 새 의존성은 작업이 명시적으로 요구할 때만 추가한다.
@@ -188,7 +230,7 @@ class AppError(Exception):
 
 ---
 
-## 14. 최종 보고 포맷
+## 15. 최종 보고 포맷
 
 코드/문서를 변경했다면 다음을 포함한다:
 

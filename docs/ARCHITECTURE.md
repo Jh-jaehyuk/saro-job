@@ -67,7 +67,7 @@ flowchart LR
 
 ---
 
-## 4. Module Map (`apps/api/app/`)  🟡
+## 4. Module Map (`apps/api/app/`)  🟢
 
 ```
 app/
@@ -296,7 +296,7 @@ class AppError(Exception):
 - **LLM 호출**: 모든 호출은 `LlmCall` 테이블에 기록. SQL로 프롬프트·응답·토큰·비용 조회. Langfuse는 유보.
 - **메트릭**: 현 단계는 의도적으로 미도입.
 
-### 7.5 시크릿 / 설정  🟡
+### 7.5 시크릿 / 설정  🟢
 
 - `apps/api/app/core/config.py`의 `Settings(BaseSettings)`가 환경변수에서만 읽음.
 - 운영: `fly secrets set`. 로컬: `.env` (gitignored). `.env.example`만 커밋.

@@ -1,0 +1,18 @@
+[project]
+name = "saro-job-worker"
+version = "0.0.1"
+description = "saro-job ARQ background worker"
+requires-python = "==3.12.*"
+dependencies = [
+  "arq>=0.26,<1.0",
+  "saro-job-api",
+  "structlog>=24.4,<25.0",
+]
+
+[tool.uv]
+# 워커는 단일 스크립트(worker.py)로 운영한다. Python 패키지로 빌드하지 않는다.
+# 그러나 `uv run`이 의존성을 해석할 수 있도록 워크스페이스 멤버로 남긴다.
+package = false
+
+[tool.uv.sources]
+saro-job-api = { workspace = true }

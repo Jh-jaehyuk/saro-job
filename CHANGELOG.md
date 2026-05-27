@@ -12,6 +12,7 @@
 ### Added
 - Git Workflow 규칙 (브랜치 전략, Conventional Commits, 버전 태그) — `AGENTS.md §11`
 - `CHANGELOG.md` 초기화
+- `.github/pull_request_template.md` — 단일 PR 템플릿 (변경 유형/위험도/체크리스트)
 
 ## [0.0.1] - 2026-05-27
 

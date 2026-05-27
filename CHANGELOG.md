@@ -20,6 +20,12 @@
 - `docker-compose.yml`: postgres(pgvector)/redis/minio. 리소스 제한 + healthcheck 완화 + profiles(`default`=postgres만, `integration`=전체)
 - `.env.example`: DATABASE_URL/REDIS_URL(6380)/S3_* 키
 - `.github/workflows/api.yml`, `worker.yml`: paths 필터 CI(ruff·mypy --strict·pytest·alembic)
+- `apps/web` 스캐폴딩: Next.js 16(App Router, Turbopack) + React 19 + TypeScript 5 strict + Tailwind 4 + ESLint flat config
+- shadcn/ui 초기화: `components.json`, `lib/utils.ts`, `components/ui/button.tsx` (예시 컴포넌트만)
+- 루트 페이지(`app/page.tsx`)를 "Hello, saro-job"로 단순화, 메타데이터 한국어화(`app/layout.tsx`)
+- Playwright E2E smoke test 1개 (TDD red→green), `playwright.config.ts`
+- `apps/web/Dockerfile` (Next.js standalone 출력 활용 슬림 이미지), `apps/web/AGENTS.md` (프론트엔드 전용 규칙)
+- `.github/workflows/web.yml`: paths 필터 CI(lint·typecheck·build·playwright e2e)
 
 ## [0.0.1] - 2026-05-27
 

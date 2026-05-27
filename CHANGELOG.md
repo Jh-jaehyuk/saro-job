@@ -13,6 +13,13 @@
 - Git Workflow 규칙 (브랜치 전략, Conventional Commits, 버전 태그) — `AGENTS.md §11`
 - `CHANGELOG.md` 초기화
 - `.github/pull_request_template.md` — 단일 PR 템플릿 (변경 유형/위험도/체크리스트)
+- uv workspace 루트(`pyproject.toml`, `.python-version=3.12`, 공용 dev deps: ruff/mypy/pytest)
+- `apps/api` 스캐폴딩: FastAPI 앱(`/health`), `core/{config,db,exceptions,logging}`, `routers/health.py`, `tasks/ping.py`, TDD 테스트 2개, Dockerfile
+- `apps/worker` 스캐폴딩: ARQ `WorkerSettings`(ping 등록), 비패키지 워크스페이스 멤버, TDD 테스트 2개, Dockerfile
+- Alembic async 환경(`env.py`) + 최초 마이그레이션 `0001_enable_pgvector`
+- `docker-compose.yml`: postgres(pgvector)/redis/minio. 리소스 제한 + healthcheck 완화 + profiles(`default`=postgres만, `integration`=전체)
+- `.env.example`: DATABASE_URL/REDIS_URL(6380)/S3_* 키
+- `.github/workflows/api.yml`, `worker.yml`: paths 필터 CI(ruff·mypy --strict·pytest·alembic)
 
 ## [0.0.1] - 2026-05-27
 

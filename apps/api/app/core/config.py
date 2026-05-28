@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     app_env: Literal["local", "dev", "prod"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    # Auth
+    auth_secret_key: str = "change-me-in-prod-this-is-a-development-only-default"
+    auth_cookie_secure: bool = False
+    auth_cookie_max_age: int = 60 * 60 * 24 * 7  # 7 days
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_url: str = "http://localhost:8000/auth/google/callback"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

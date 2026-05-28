@@ -10,6 +10,7 @@ import asyncio
 from logging.config import fileConfig
 
 from app.core.config import get_settings
+from app.models import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -23,8 +24,7 @@ if config.config_file_name is not None:
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
-# 현재 도메인 모델은 비어 있다. 도메인 PR에서 `app.models.Base.metadata`를 연결한다.
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

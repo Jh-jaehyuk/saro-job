@@ -26,6 +26,14 @@
 - Playwright E2E smoke test 1개 (TDD red→green), `playwright.config.ts`
 - `apps/web/Dockerfile` (Next.js standalone 출력 활용 슬림 이미지), `apps/web/AGENTS.md` (프론트엔드 전용 규칙)
 - `.github/workflows/web.yml`: paths 필터 CI(lint·typecheck·build·playwright e2e)
+- 인증/멀티테넌시 토대: `fastapi-users` 14.x + `httpx-oauth`(Google) 의존성 추가
+- SQLAlchemy 모델: `Base` + `TimestampMixin`, `Organization`, `User`(`SQLAlchemyBaseUserTableUUID` + `org_id` FK)
+- Alembic 마이그레이션 `0002_organizations_users`(손작성, downgrade 검증)
+- `app/core/auth.py`: 쿠키+JWT 백엔드, `UserManager.on_after_register`에서 1인 워크스페이스 자동 생성, `current_active_user` 의존성
+- `app/routers/auth.py`: `/auth/{register,cookie/login,cookie/logout}`, `/users/me`, `/auth/google/{authorize,callback}`(OAuth 키 설정 시에만 등록)
+- `app/schemas/user.py`: `UserRead/UserCreate/UserUpdate` (fastapi-users 베이스 + `org_id` 노출)
+- `Settings`에 `auth_secret_key`, `auth_cookie_*`, `google_oauth_*` 추가 + `.env.example` 갱신
+- 인증 흐름 통합 테스트 3개(미인증 401, 가입→로그인→/users/me + org_id 채움, Google OAuth 라우터 smoke)
 
 ## [0.0.1] - 2026-05-27
 

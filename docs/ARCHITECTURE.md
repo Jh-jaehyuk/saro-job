@@ -143,8 +143,8 @@ erDiagram
 
 | 엔티티 | 핵심 필드 | 메모 |
 |---|---|---|
-| `Organization` | id, name, created_at | 멀티테넌시 루트 |
-| `User` | id, org_id, email, oauth_subject | fastapi-users 관리 |
+| `Organization` | id, name, created_at, updated_at | 멀티테넌시 루트 🟢 |
+| `User` | id, email, hashed_password, is_active/superuser/verified, org_id, created_at, updated_at | fastapi-users 관리, 가입 시 1인 워크스페이스 자동 생성 🟢 |
 | `JobDescription` | id, org_id, title, raw_text, requirements_json, embedding(vector 1536) | 재사용 가능 |
 | `Resume` | id, org_id, pdf_key, parsed_text, sections_json, contact_json, parse_confidence, embedding | 동일 후보가 여러 JD에서 평가 가능 |
 | `Match` | id, jd_id, resume_id, overall_score, category_scores_json, grade, matched_keywords_json, missing_keywords_json | UNIQUE(jd_id, resume_id) |
@@ -261,11 +261,14 @@ sequenceDiagram
 
 ## 7. Cross-cutting Concerns
 
-### 7.1 인증 / 권한  🟡
+### 7.1 인증 / 권한  🟢 (RBAC 제외 🟡)
 
-- **fastapi-users + Authlib(Google OAuth)**. 쿠키 전략(`HttpOnly`, `SameSite=Lax`, `Secure`).
-- 모든 보호 라우터는 `current_user: User = Depends(current_active_user)` 의존성을 받음.
+- **fastapi-users 14.x + httpx-oauth(Google)**. 쿠키 전략(`HttpOnly`, `SameSite=Lax`, `Secure`는 운영 환경에서만). JWT를 쿠키에 직렬화하여 SSE EventSource와 자연스럽게 호환.
+- 엔드포인트: `/auth/register`, `/auth/cookie/{login,logout}`, `/users/me`, `/auth/google/{authorize,callback}`(OAuth 키가 설정된 경우에만 라우터 등록).
+- **조직 자동 생성**: 가입 직후 `UserManager.on_after_register` 훅이 `Organization`을 만들고 `user.org_id`에 연결한다. 1인 워크스페이스 패턴(팀 초대 흐름은 별도 PR로 분리).
+- 모든 보호 라우터는 `current_user: User = Depends(current_active_user)` 의존성을 받음(`app.core.auth.current_active_user`).
 - **테넌트 격리**: 모든 쿼리는 `WHERE org_id = current_user.org_id`로 필터. services 함수가 `user` 또는 `org_id`를 인자로 받는 것을 *강제*. DB 레벨 RLS는 도입하지 않음(Postgres에 직접 SQL 실행하는 경로가 없는 한 services 필터로 충분).
+- **RBAC / 역할**: 현재 미도입. 멤버는 동등 권한이며 admin 비트는 fastapi-users 기본 `is_superuser` 한 단계만 존재. 필요해지면 별도 설계로 진행.
 
 ### 7.2 트랜잭션 경계  🟡
 

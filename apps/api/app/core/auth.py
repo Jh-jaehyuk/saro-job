@@ -89,6 +89,14 @@ fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 current_active_user = fastapi_users.current_user(active=True)
 
 
+async def current_org_id(
+    user: Annotated[User, Depends(current_active_user)],
+) -> uuid.UUID:
+    """현재 사용자의 org_id. 가입 시 on_after_register가 항상 채우므로 None 불가."""
+    assert user.org_id is not None, "authenticated user must have an org_id"
+    return user.org_id
+
+
 def _make_google_oauth_client() -> GoogleOAuth2 | None:
     s = get_settings()
     if not s.google_oauth_client_id or not s.google_oauth_client_secret:

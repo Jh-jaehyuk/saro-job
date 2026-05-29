@@ -1,29 +1,10 @@
 """Auth flow tests — register, login, /users/me, organization auto-create.
 
-로컬 postgres(`docker compose up -d postgres`)에 의존한다. 각 테스트 시작 시
-users/organizations 테이블을 truncate하여 격리한다.
+로컬 postgres(`docker compose up -d postgres`)에 의존한다. 테이블 격리는 conftest의
+autouse `_reset_tables` 픽스처가 담당한다.
 """
 
-import asyncio
-
-import pytest
-from app.core.db import async_engine
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-
-
-@pytest.fixture(autouse=True)
-def _reset_tables() -> None:
-    """매 테스트 직전에 users/organizations를 truncate."""
-
-    async def _truncate() -> None:
-        async with async_engine.begin() as conn:
-            await conn.execute(text("TRUNCATE TABLE users, organizations RESTART IDENTITY CASCADE"))
-        # 매 테스트가 새 이벤트 루프를 만들어 asyncio.run 한다. 이전 루프에 묶인
-        # 연결이 풀에 남으면 다음 루프에서 "Event loop is closed" 오류가 난다.
-        await async_engine.dispose()
-
-    asyncio.run(_truncate())
 
 
 def test_users_me_unauthenticated_returns_401(client: TestClient) -> None:

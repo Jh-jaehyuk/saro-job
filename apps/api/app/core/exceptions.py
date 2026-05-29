@@ -33,6 +33,30 @@ class AppError(Exception):
         super().__init__(self.message_ko)
 
 
+class JobDescriptionNotFound(AppError):
+    code = "JD_NOT_FOUND"
+    http_status = status.HTTP_404_NOT_FOUND
+    message_ko = "채용 공고를 찾을 수 없습니다."
+
+
+class ResumeNotFound(AppError):
+    code = "RESUME_NOT_FOUND"
+    http_status = status.HTTP_404_NOT_FOUND
+    message_ko = "이력서를 찾을 수 없습니다."
+
+
+class MatchNotFound(AppError):
+    code = "MATCH_NOT_FOUND"
+    http_status = status.HTTP_404_NOT_FOUND
+    message_ko = "평가 결과를 찾을 수 없습니다."
+
+
+class PdfParseFailed(AppError):
+    code = "PDF_PARSE_FAILED"
+    http_status = 422
+    message_ko = "PDF에서 텍스트를 추출하지 못했습니다."
+
+
 def _app_error_payload(err: AppError) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "error": {

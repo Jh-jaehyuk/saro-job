@@ -34,6 +34,14 @@
 - `app/schemas/user.py`: `UserRead/UserCreate/UserUpdate` (fastapi-users 베이스 + `org_id` 노출)
 - `Settings`에 `auth_secret_key`, `auth_cookie_*`, `google_oauth_*` 추가 + `.env.example` 갱신
 - 인증 흐름 통합 테스트 3개(미인증 401, 가입→로그인→/users/me + org_id 채움, Google OAuth 라우터 smoke)
+- 도메인 모델 6종: `JobDescription`, `Resume`, `Match`(UNIQUE(jd_id,resume_id)), `InterviewQuestion`, `ResumeProcessingJob`, `LlmCall`
+- pgvector 임베딩 컬럼: `JobDescription.embedding`/`Resume.embedding` = `Vector(1536)` + ivfflat(vector_cosine_ops) 인덱스
+- Alembic 마이그레이션 `0003_domain_models`(손작성, up/down 검증)
+- Pydantic 읽기 스키마: `JobDescriptionRead/Create`, `ResumeRead`, `PdfExtractResult`, `MatchRead`, `InterviewQuestionRead`
+- 도메인 예외: `JobDescriptionNotFound`, `ResumeNotFound`, `MatchNotFound`, `PdfParseFailed`
+- Port 추상화 3종: `LLMClient`/`PDFExtractor`(Protocol 인터페이스), `ObjectStorage`(Protocol) + `S3CompatStorage` 구현(boto3 presigned PUT/GET, R2/MinIO 공용)
+- `boto3` 의존성 + `boto3-stubs[s3]`(dev) 추가
+- Port/모델 테스트 6개(모델 메타데이터 3, presigned URL 유닛 2 + 키 규칙, Protocol 계약 2)
 
 ## [0.0.1] - 2026-05-27
 

@@ -121,13 +121,13 @@ core
 
 | Port | 위치 | 1차 구현 | 잠재 구현 |
 |---|---|---|---|
-| `LLMClient` | `services/llm.py` | `OpenAIClient` 🟡 | Anthropic, Gemini |
-| `PDFExtractor` | `services/pdf.py` | `PdfplumberExtractor` + `TesseractFallback` 🟡 | AWS Textract, Document AI |
-| `ObjectStorage` | `services/storage.py` | `S3CompatStorage` (R2/MinIO 공용) 🟡 | 다른 S3 호환 백엔드 |
+| `LLMClient` | `services/llm.py` | 인터페이스(Protocol) 🟢 · `OpenAIClient` 구현 🟡 | Anthropic, Gemini |
+| `PDFExtractor` | `services/pdf.py` | 인터페이스(Protocol) 🟢 · `PdfplumberExtractor`+`TesseractFallback` 구현 🟡 | AWS Textract, Document AI |
+| `ObjectStorage` | `services/storage.py` | `S3CompatStorage` (R2/MinIO 공용) 🟢 | 다른 S3 호환 백엔드 |
 
 ---
 
-## 5. Core Data Model  🟡
+## 5. Core Data Model  🟢
 
 ```mermaid
 erDiagram
@@ -145,14 +145,14 @@ erDiagram
 |---|---|---|
 | `Organization` | id, name, created_at, updated_at | 멀티테넌시 루트 🟢 |
 | `User` | id, email, hashed_password, is_active/superuser/verified, org_id, created_at, updated_at | fastapi-users 관리, 가입 시 1인 워크스페이스 자동 생성 🟢 |
-| `JobDescription` | id, org_id, title, raw_text, requirements_json, embedding(vector 1536) | 재사용 가능 |
-| `Resume` | id, org_id, pdf_key, parsed_text, sections_json, contact_json, parse_confidence, embedding | 동일 후보가 여러 JD에서 평가 가능 |
-| `Match` | id, jd_id, resume_id, overall_score, category_scores_json, grade, matched_keywords_json, missing_keywords_json | UNIQUE(jd_id, resume_id) |
-| `InterviewQuestion` | id, match_id, question, question_type, order, edited_by_user | 사용자 편집 추적 |
-| `ResumeProcessingJob` | id, resume_id, jd_id, state, error_json, started_at, finished_at, step_state_json | ARQ 외부 상태 거울 |
-| `LlmCall` | id, purpose, model, prompt, response, tokens_in, tokens_out, latency_ms, cost_usd, created_at | 자체 관찰성 |
+| `JobDescription` | id, org_id, title, raw_text, requirements_json, embedding(vector 1536) | 재사용 가능 🟢 |
+| `Resume` | id, org_id, pdf_key, parsed_text, sections_json, contact_json, parse_confidence, embedding | 동일 후보가 여러 JD에서 평가 가능 🟢 |
+| `Match` | id, jd_id, resume_id, overall_score, category_scores_json, grade, matched_keywords_json, missing_keywords_json | UNIQUE(jd_id, resume_id) 🟢 |
+| `InterviewQuestion` | id, match_id, question, question_type, order, edited_by_user | 사용자 편집 추적 🟢 |
+| `ResumeProcessingJob` | id, resume_id, jd_id, state, error_json, started_at, finished_at, step_state_json | ARQ 외부 상태 거울 🟢 |
+| `LlmCall` | id, purpose, model, prompt, response, tokens_in, tokens_out, latency_ms, cost_usd, created_at | 자체 관찰성 🟢 |
 
-벡터: `Resume.embedding`, `JobDescription.embedding`은 `pgvector.Vector(1536)` (text-embedding-3-small). 인덱스는 `ivfflat (vector_cosine_ops)`.
+벡터: `Resume.embedding`, `JobDescription.embedding`은 `pgvector.Vector(1536)` (text-embedding-3-small). 인덱스는 `ivfflat (vector_cosine_ops)`. 컬럼·인덱스는 도입됨(🟢), 실제 임베딩 채우기는 파이프라인 PR에서.
 
 ---
 

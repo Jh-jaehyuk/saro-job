@@ -42,6 +42,12 @@
 - Port 추상화 3종: `LLMClient`/`PDFExtractor`(Protocol 인터페이스), `ObjectStorage`(Protocol) + `S3CompatStorage` 구현(boto3 presigned PUT/GET, R2/MinIO 공용)
 - `boto3` 의존성 + `boto3-stubs[s3]`(dev) 추가
 - Port/모델 테스트 6개(모델 메타데이터 3, presigned URL 유닛 2 + 키 규칙, Protocol 계약 2)
+- JD 서비스·라우터: `POST /jds`(생성), `GET /jds`(목록), `GET /jds/{id}`(상세) — org 스코프
+- 이력서 업로드: `POST /resumes/upload-url`(presigned PUT 발급 + `Resume` row, 결정적 키), `POST /resumes/{id}/finalize`(`ResumeProcessingJob(queued)` 생성, 멱등). **ARQ enqueue는 보류**(파이프라인 PR)
+- Match 조회: `GET /jds/{id}/matches`, `GET /matches/{id}`, `GET /matches/{id}/questions` — JD org 조인으로 테넌트 격리
+- `current_org_id` 의존성(인증 사용자 org_id), `get_storage` 의존성 제공자
+- 라우터 통합 테스트 12개(JD 4, 이력서 5, Match 3) — 교차 테넌트 404·멱등·미인증 401 포함
+- conftest: 전 도메인 테이블 truncate 격리 + 가입/로그인 헬퍼 + storage fake override
 
 ## [0.0.1] - 2026-05-27
 

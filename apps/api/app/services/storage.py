@@ -10,7 +10,7 @@ from typing import Protocol
 import boto3
 from botocore.config import Config
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 
 
 class ObjectStorage(Protocol):
@@ -53,3 +53,8 @@ class S3CompatStorage:
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=expires_in,
         )
+
+
+def get_storage() -> ObjectStorage:
+    """FastAPI 의존성. 라우터는 `Depends(get_storage)`로 스토리지를 주입받는다."""
+    return S3CompatStorage(get_settings())

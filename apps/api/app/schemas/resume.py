@@ -26,3 +26,25 @@ class ResumeRead(BaseModel):
     parse_confidence: float | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ResumeUploadRequest(BaseModel):
+    filename: str
+
+
+class ResumeUploadResponse(BaseModel):
+    resume_id: uuid.UUID
+    upload_url: str
+
+
+class ResumeFinalizeRequest(BaseModel):
+    jd_id: uuid.UUID
+
+
+class ResumeProcessingJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    resume_id: uuid.UUID
+    jd_id: uuid.UUID
+    state: str

@@ -158,7 +158,7 @@ erDiagram
 
 ## 6. Key Flows
 
-### 6.1 JD 생성 → 이력서 일괄 업로드 → 파이프라인 트리거  🟡
+### 6.1 JD 생성 → 이력서 일괄 업로드 → 파이프라인 트리거  🟢 (ARQ enqueue·SSE 제외 🟡)
 
 ```mermaid
 sequenceDiagram
@@ -188,6 +188,8 @@ sequenceDiagram
 ```
 
 업로드 파일은 브라우저 → R2 직접(presigned PUT)으로 가서 백엔드 대역 부담을 줄인다. 백엔드는 메타데이터만.
+
+**구현 상태**: `POST /jds`(생성·목록·상세), `POST /resumes/upload-url`(presigned PUT 발급 + `Resume` row), `POST /resumes/{id}/finalize`(`ResumeProcessingJob(state="queued")` 생성)까지 🟢. **ARQ enqueue는 아직 미동작**(워커 핸들러 미구현) — finalize는 잡 row만 만들고 큐잉은 파이프라인 PR에서. SSE 구독(§6.3)도 별도 PR.
 
 ### 6.2 이력서 1건 처리 파이프라인 (워커 내부)  🟡
 

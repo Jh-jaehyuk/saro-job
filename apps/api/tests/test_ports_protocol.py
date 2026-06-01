@@ -4,9 +4,14 @@
 깨지면 여기서 잡힌다.
 """
 
+from decimal import Decimal
+
+from app.schemas.llm import LlmUsage
 from app.schemas.resume import PdfExtractResult
 from app.services.llm import LLMClient
 from app.services.pdf import PDFExtractor
+
+_USAGE = LlmUsage(model="fake", tokens_in=1, tokens_out=1, latency_ms=1, cost_usd=Decimal("0"))
 
 
 class _FakePdfExtractor:
@@ -15,13 +20,13 @@ class _FakePdfExtractor:
 
 
 class _FakeLLMClient:
-    async def embed(self, text: str) -> list[float]:
-        return [0.0] * 1536
+    async def embed(self, text: str) -> tuple[list[float], LlmUsage]:
+        return [0.0] * 1536, _USAGE
 
     async def structured_completion(
         self, *, purpose: str, system: str, user: str, schema: type[PdfExtractResult]
-    ) -> PdfExtractResult:
-        return PdfExtractResult(text=user, confidence=0.5)
+    ) -> tuple[PdfExtractResult, LlmUsage]:
+        return PdfExtractResult(text=user, confidence=0.5), _USAGE
 
 
 def test_fake_pdf_extractor_satisfies_protocol() -> None:

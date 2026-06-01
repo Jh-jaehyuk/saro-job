@@ -22,6 +22,8 @@ class ObjectStorage(Protocol):
 
     def generate_download_url(self, key: str, *, expires_in: int = 3600) -> str: ...
 
+    def get_object(self, key: str) -> bytes: ...
+
 
 class S3CompatStorage:
     """boto3 기반 S3 호환 스토리지. Cloudflare R2 / MinIO 양쪽에 동작."""
@@ -53,6 +55,11 @@ class S3CompatStorage:
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=expires_in,
         )
+
+    def get_object(self, key: str) -> bytes:
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        body: bytes = response["Body"].read()
+        return body
 
 
 def get_storage() -> ObjectStorage:

@@ -48,6 +48,15 @@
 - `current_org_id` 의존성(인증 사용자 org_id), `get_storage` 의존성 제공자
 - 라우터 통합 테스트 12개(JD 4, 이력서 5, Match 3) — 교차 테넌트 404·멱등·미인증 401 포함
 - conftest: 전 도메인 테이블 truncate 격리 + 가입/로그인 헬퍼 + storage fake override
+- 이력서 처리 파이프라인 오케스트레이션(`app/tasks/process_resume.py:run_resume_pipeline`): parsed→analyzed→embedded→scored→questions→done 단계, 단계별 트랜잭션(외부 호출은 tx 밖), `step_state_json` 기반 멱등 재시도, 실패 시 `state="failed"`/`error_json`
+- 스코어링(`app/services/scoring.py`, 순수): 코사인 유사도 + 키워드 매칭 가중합(0.6/0.4) → `overall_score`/`grade`(상≥0.75/중≥0.5/하)/matched·missing
+- `ProgressPublisher`(`app/core/sse.py`) Protocol + `NoopProgressPublisher` 기본 구현. 실제 Redis 발행은 SSE PR
+- LLMClient Port 진화: `embed`/`structured_completion`이 `(값, LlmUsage)` 튜플 반환 → 파이프라인이 `LlmCall` 기록(§6.2)
+- ObjectStorage Port + `S3CompatStorage`에 `get_object(key)->bytes` 추가
+- LLM I/O 스키마: `LlmUsage`, `ResumeAnalysis`, `GeneratedQuestions`
+- 워커: `process_resume`를 `WorkerSettings.functions`에 등록, `on_startup`에서 ports 주입(실 OpenAI/PDF 어댑터는 placeholder — 어댑터 PR 전까지 실행 시 `NotImplementedError`)
+- `redis_url`을 `os.environ` 직접 사용 대신 `get_settings()` 경유로 교정(AGENTS §10)
+- 파이프라인 통합 테스트 5개(상 등급 전 단계·하 등급 질문 skip·멱등 재실행·실패 처리·진행률 발행) + scoring 순수 단위 6개
 
 ## [0.0.1] - 2026-05-27
 

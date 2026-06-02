@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from .conftest import authenticate
+from .conftest import FakeArqPool, authenticate
 
 
 def _create_jd(client: TestClient) -> str:
@@ -32,7 +32,7 @@ def test_finalize_creates_queued_job(client: TestClient) -> None:
     assert body["state"] == "queued"
 
 
-def test_finalize_is_idempotent(client: TestClient) -> None:
+def test_finalize_is_idempotent(client: TestClient, arq_pool: FakeArqPool) -> None:
     authenticate(client, "hr@example.com")
     jd_id = _create_jd(client)
     resume_id = client.post("/resumes/upload-url", json={"filename": "c.pdf"}).json()["resume_id"]
@@ -40,6 +40,22 @@ def test_finalize_is_idempotent(client: TestClient) -> None:
     first = client.post(f"/resumes/{resume_id}/finalize", json={"jd_id": jd_id}).json()
     second = client.post(f"/resumes/{resume_id}/finalize", json={"jd_id": jd_id}).json()
     assert first["id"] == second["id"]
+    # 큐 적재는 1회만 — 두 번째 finalize는 기존 잡을 반환.
+    assert len(arq_pool.calls) == 1
+
+
+def test_finalize_enqueues_process_resume(client: TestClient, arq_pool: FakeArqPool) -> None:
+    authenticate(client, "hr@example.com")
+    jd_id = _create_jd(client)
+    resume_id = client.post("/resumes/upload-url", json={"filename": "c.pdf"}).json()["resume_id"]
+
+    client.post(f"/resumes/{resume_id}/finalize", json={"jd_id": jd_id})
+
+    assert len(arq_pool.calls) == 1
+    function, args, kwargs = arq_pool.calls[0]
+    assert function == "process_resume"
+    assert args == (resume_id, jd_id)
+    assert kwargs["_queue_name"] == "saro-job:default"
 
 
 def test_finalize_cross_org_resume_returns_404(client: TestClient) -> None:

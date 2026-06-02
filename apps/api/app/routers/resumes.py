@@ -1,13 +1,14 @@
 """Resume 라우터 — 업로드 URL 발급 + finalize."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_org_id
 from app.core.db import get_session
+from app.core.queue import get_arq_pool
 from app.schemas.resume import (
     ResumeFinalizeRequest,
     ResumeProcessingJobRead,
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/resumes", tags=["resumes"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 OrgDep = Annotated[uuid.UUID, Depends(current_org_id)]
 StorageDep = Annotated[ObjectStorage, Depends(get_storage)]
+ArqDep = Annotated[Any, Depends(get_arq_pool)]
 
 
 @router.post("/upload-url")
@@ -43,6 +45,7 @@ async def finalize_resume(
     data: ResumeFinalizeRequest,
     session: SessionDep,
     org_id: OrgDep,
+    arq_pool: ArqDep,
 ) -> ResumeProcessingJobRead:
-    job = await resume_service.finalize_resume(session, org_id, resume_id, data.jd_id)
+    job = await resume_service.finalize_resume(session, arq_pool, org_id, resume_id, data.jd_id)
     return ResumeProcessingJobRead.model_validate(job)

@@ -13,6 +13,7 @@ from collections.abc import Iterator
 import pytest
 from app.core.config import get_settings
 from app.core.db import async_engine
+from app.core.queue import get_arq_pool
 from app.main import app
 from app.services.storage import get_storage
 from fastapi.testclient import TestClient
@@ -58,11 +59,30 @@ class _FakeStorage:
     def generate_download_url(self, key: str, *, expires_in: int = 3600) -> str:
         return f"https://fake-bucket.example/{key}?sig=download"
 
+    def get_object(self, key: str) -> bytes:
+        return b"%PDF-fake"
+
+
+class FakeArqPool:
+    """ARQ 풀 대체 — `enqueue_job` 호출만 기록한다(redis 미사용)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    async def enqueue_job(self, function: str, *args: object, **kwargs: object) -> None:
+        self.calls.append((function, args, kwargs))
+
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    """Fake storage가 주입된 TestClient."""
+def arq_pool() -> FakeArqPool:
+    return FakeArqPool()
+
+
+@pytest.fixture
+def client(arq_pool: FakeArqPool) -> Iterator[TestClient]:
+    """Fake storage + fake ARQ 풀이 주입된 TestClient."""
     app.dependency_overrides[get_storage] = _FakeStorage
+    app.dependency_overrides[get_arq_pool] = lambda: arq_pool
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

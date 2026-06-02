@@ -57,6 +57,13 @@
 - 워커: `process_resume`를 `WorkerSettings.functions`에 등록, `on_startup`에서 ports 주입(실 OpenAI/PDF 어댑터는 placeholder — 어댑터 PR 전까지 실행 시 `NotImplementedError`)
 - `redis_url`을 `os.environ` 직접 사용 대신 `get_settings()` 경유로 교정(AGENTS §10)
 - 파이프라인 통합 테스트 5개(상 등급 전 단계·하 등급 질문 skip·멱등 재실행·실패 처리·진행률 발행) + scoring 순수 단위 6개
+- `PdfplumberExtractor`(`app/services/pdf.py`): pdfplumber 기반 텍스트 PDF 추출, 페이지당 평균 문자 수로 `confidence` 산출, 텍스트 부족 시 `PdfParseFailed`. Tesseract OCR 폴백은 후속 PR
+- `app/core/queue.py`: lazy ARQ Redis 풀(`get_arq_pool`) + `QUEUE_NAME` 상수
+- `finalize_resume` → ARQ `process_resume` 적재(멱등 — 새 잡일 때만 enqueue). 라우터에 `Depends(get_arq_pool)` 추가
+- 워커 `on_startup`: `_NotImplementedPDFExtractor` 제거 → `PdfplumberExtractor` 실 주입. LLM은 여전히 placeholder(다음 PR)
+- 샘플 PDF fixture(`apps/api/tests/fixtures/{sample_resume,empty_text}.pdf`) — macOS `cupsfilter`로 1회 생성, PDF 생성 deps 회피
+- 테스트 신규: PDF 어댑터 3개(한영 추출, 빈 텍스트 PdfParseFailed, 손상 PDF), finalize ARQ enqueue 1개, 워커 on_startup PDF 와이어링 1개
+- ARCHITECTURE §4 PDFExtractor 🟢(텍스트 PDF), §6.2 구현 상태 갱신
 
 ## [0.0.1] - 2026-05-27
 

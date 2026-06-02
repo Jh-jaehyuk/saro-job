@@ -1,15 +1,18 @@
-"""Resume 도메인 서비스. 업로드 URL 발급 + finalize(처리 잡 생성).
+"""Resume 도메인 서비스. 업로드 URL 발급 + finalize(처리 잡 생성 + ARQ enqueue).
 
 브라우저가 presigned PUT으로 R2에 직접 올린다(ARCHITECTURE §6.1). 백엔드는 결정적
-키로 Resume row를 먼저 만들고 URL만 발급한다.
+키로 Resume row를 먼저 만들고 URL만 발급한다. finalize는 잡 row를 만들고 ARQ 큐에
+`process_resume`를 적재한다.
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import JobDescriptionNotFound, ResumeNotFound
+from app.core.queue import QUEUE_NAME
 from app.models.job_description import JobDescription
 from app.models.resume import Resume
 from app.models.resume_processing_job import ResumeProcessingJob
@@ -30,6 +33,7 @@ async def create_resume_with_upload_url(
 
 async def finalize_resume(
     session: AsyncSession,
+    arq_pool: Any,
     org_id: uuid.UUID,
     resume_id: uuid.UUID,
     jd_id: uuid.UUID,
@@ -66,6 +70,7 @@ async def finalize_resume(
     job = ResumeProcessingJob(resume_id=resume_id, jd_id=jd_id, state="queued", step_state_json={})
     session.add(job)
     await session.flush()
-    # TODO(파이프라인 PR): 여기서 ARQ `process_resume(resume_id, jd_id)`를 enqueue.
-    #   현재는 워커 핸들러가 없어 row만 'queued' 상태로 남긴다.
+    # 새 잡일 때만 큐에 적재 — 같은 (resume, jd) 재호출은 위 멱등 분기에서 잡혀
+    # 여기까지 안 온다. 워커는 LLM placeholder 한도 내에서 parsed 단계까지 처리한다.
+    await arq_pool.enqueue_job("process_resume", str(resume_id), str(jd_id), _queue_name=QUEUE_NAME)
     return job

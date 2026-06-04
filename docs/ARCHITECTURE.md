@@ -237,7 +237,7 @@ sequenceDiagram
 
 **구현 상태**: 오케스트레이션 `app/tasks/process_resume.py:run_resume_pipeline` 🟢 — 단계별 트랜잭션·멱등(`step_state_json`)·LlmCall 기록·Match upsert·상/중 등급에서만 질문 생성·실패 시 `state="failed"`/`error_json`. 스코어링 `app/services/scoring.py`(순수, 코사인+키워드 가중합, 상≥0.75/중≥0.5/하) 🟢. `PdfplumberExtractor`(`app/services/pdf.py`) 🟢 — 텍스트 PDF에서 한+영 추출, 텍스트 부족 시 `PdfParseFailed`. `finalize` → ARQ `process_resume` enqueue 🟢(`app/services/resume_service.py` + `app/core/queue.py`의 lazy 풀). 워커는 PDF 어댑터 와이어링 완료 🟢. `ProgressPublisher` 인터페이스 🟢 + `NoopProgressPublisher` 기본, 실 Redis 발행 🟡(SSE PR). `OpenAIClient` 🟡(다음 어댑터 PR — VCR 카세트). Tesseract OCR 폴백 🟡(OCR PR). 현 단계 워커 실행은 parsed 단계까지만 성공하고 analyzed에서 `NotImplementedError`로 실패한다.
 
-### 6.3 SSE 진행률 구독  🟡
+### 6.3 SSE 진행률 구독  🟢
 
 ```mermaid
 sequenceDiagram
@@ -260,6 +260,8 @@ sequenceDiagram
 - 진실 원천은 DB(`ResumeProcessingJob`). SSE는 *푸시* 채널일 뿐. 클라가 새로 들어오면 DB에서 현재 상태 GET 후 SSE 구독.
 - 응답 헤더: `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
 - EventSource는 커스텀 헤더 못 보냄 → 쿠키(`HttpOnly`, `SameSite=Lax`) 인증.
+
+**구현 상태**: `RedisProgressPublisher`(`app/core/sse.py`) 🟢 — 채널 `jd:{jd_id}:progress`에 JSON 발행. 라우터 `GET /jds/{id}/progress`(`app/routers/progress.py`) 🟢 — `StreamingResponse(text/event-stream)` + 헤더(`Cache-Control: no-cache`, `X-Accel-Buffering: no`, `Connection: keep-alive`), heartbeat 간격 `Settings.sse_heartbeat_seconds`(운영 30s). 재연결 동기화용 `GET /jds/{id}/status` 🟢 — 해당 JD의 `ResumeProcessingJob` 목록 반환. 워커 `on_startup`이 `RedisProgressPublisher`를 ctx에 주입 🟢. 프론트엔드 `EventSource` 클라이언트 🟡(apps/web 후속).
 
 ---
 

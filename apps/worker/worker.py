@@ -18,10 +18,11 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, ClassVar
 
+import redis.asyncio as aioredis
 from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
 from app.core.queue import QUEUE_NAME
-from app.core.sse import NoopProgressPublisher
+from app.core.sse import RedisProgressPublisher
 from app.schemas.llm import LlmUsage
 from app.services.pdf import PdfplumberExtractor
 from app.services.storage import S3CompatStorage
@@ -46,11 +47,13 @@ class _NotImplementedLLMClient:
 async def on_startup(ctx: dict[str, Any]) -> None:
     """ARQ 워커 시작 시 ports를 ctx에 주입(composition root)."""
     settings = get_settings()
+    redis_client = aioredis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
     ctx["session_factory"] = AsyncSessionLocal
     ctx["storage"] = S3CompatStorage(settings)
-    ctx["publisher"] = NoopProgressPublisher()
+    ctx["publisher"] = RedisProgressPublisher(redis_client)
     ctx["pdf"] = PdfplumberExtractor()
     ctx["llm"] = _NotImplementedLLMClient()
+    ctx["_redis"] = redis_client  # 정리용 보관(다음 PR에서 on_shutdown 정리).
 
 
 class WorkerSettings:

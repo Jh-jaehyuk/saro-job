@@ -6,6 +6,7 @@ workspace package (``saro-job-api``). They will only pass after
 editable and ``apps/api`` has scaffolded ``app/tasks/ping.py``.
 """
 
+from app.core.sse import RedisProgressPublisher
 from app.services.pdf import PdfplumberExtractor
 from app.tasks.ping import ping
 from app.tasks.process_resume import process_resume
@@ -28,3 +29,9 @@ async def test_on_startup_wires_pdfplumber_extractor() -> None:
     ctx: dict[str, object] = {}
     await on_startup(ctx)
     assert isinstance(ctx["pdf"], PdfplumberExtractor)
+
+
+async def test_on_startup_wires_redis_progress_publisher() -> None:
+    ctx: dict[str, object] = {}
+    await on_startup(ctx)
+    assert isinstance(ctx["publisher"], RedisProgressPublisher)

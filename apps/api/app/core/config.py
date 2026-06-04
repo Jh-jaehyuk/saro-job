@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     app_env: Literal["local", "dev", "prod"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    # SSE
+    # heartbeat 간격(초). 운영 30s, 테스트는 monkeypatch로 짧게 override.
+    sse_heartbeat_seconds: float = 30.0
+
     # Auth
     auth_secret_key: str = "change-me-in-prod-this-is-a-development-only-default"
     auth_cookie_secure: bool = False

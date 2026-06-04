@@ -64,6 +64,16 @@
 - 샘플 PDF fixture(`apps/api/tests/fixtures/{sample_resume,empty_text}.pdf`) — macOS `cupsfilter`로 1회 생성, PDF 생성 deps 회피
 - 테스트 신규: PDF 어댑터 3개(한영 추출, 빈 텍스트 PdfParseFailed, 손상 PDF), finalize ARQ enqueue 1개, 워커 on_startup PDF 와이어링 1개
 - ARCHITECTURE §4 PDFExtractor 🟢(텍스트 PDF), §6.2 구현 상태 갱신
+- SSE 진행률: `RedisProgressPublisher`(`app/core/sse.py`) — 채널 `jd:{jd_id}:progress`에 JSON 발행
+- `app/core/redis.py`: lazy `get_redis()` (#8 queue.py 패턴)
+- `Settings.sse_heartbeat_seconds`(기본 30s, 테스트 override 가능)
+- 라우터 `app/routers/progress.py`: `GET /jds/{id}/progress`(EventSource, 쿠키 인증, SSE 헤더 + heartbeat), `GET /jds/{id}/status`(재연결 동기화용 잡 목록)
+- `jd_service.list_processing_jobs`: JD 소유 검증 후 처리 잡 행 반환
+- 워커 `on_startup`: `NoopProgressPublisher` → `RedisProgressPublisher` 교체(redis 클라이언트 ctx 주입)
+- CI(`.github/workflows/api.yml`): redis service container(`redis:7-alpine`) 추가
+- mypy override에 `redis.*` 추가
+- 테스트 신규: redis publisher 1, status 3, SSE 라우터 등록 3, 워커 redis publisher 와이어링 1
+- ARCHITECTURE §6.3 🟢 갱신(프론트엔드 EventSource 클라이언트는 🟡 — apps/web 후속)
 
 ## [0.0.1] - 2026-05-27
 

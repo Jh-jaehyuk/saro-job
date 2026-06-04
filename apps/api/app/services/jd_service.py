@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import JobDescriptionNotFound
 from app.models.job_description import JobDescription
+from app.models.resume_processing_job import ResumeProcessingJob
 from app.schemas.job_description import JobDescriptionCreate
 
 
@@ -44,3 +45,16 @@ async def get_jd(session: AsyncSession, org_id: uuid.UUID, jd_id: uuid.UUID) -> 
     if jd is None:
         raise JobDescriptionNotFound()
     return jd
+
+
+async def list_processing_jobs(
+    session: AsyncSession, org_id: uuid.UUID, jd_id: uuid.UUID
+) -> list[ResumeProcessingJob]:
+    """JD 소유 검증 후 해당 JD의 모든 처리 잡 row를 반환(SSE 재연결 동기화용)."""
+    await get_jd(session, org_id, jd_id)
+    result = await session.execute(
+        select(ResumeProcessingJob)
+        .where(ResumeProcessingJob.jd_id == jd_id)
+        .order_by(ResumeProcessingJob.created_at.desc())
+    )
+    return list(result.scalars().all())

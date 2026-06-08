@@ -53,7 +53,7 @@ flowchart LR
 
 | 컨테이너 | 책임 | 비상태/상태 | 배포 단위 |
 |---|---|---|---|
-| `apps/web` | UI, 인증 쿠키 관리, SSE 구독 | 비상태 | Fly app |
+| `apps/web` 🟢 인증/JD CRUD · 🟡 업로드/대시보드/SSE 구독 | UI, 인증 쿠키 관리, SSE 구독 | 비상태 | Fly app |
 | `apps/api` | HTTP 핸들러, 인증, 큐 enqueue, SSE fan-out | 비상태 | Fly app |
 | `apps/worker` | 이력서 처리 파이프라인 실행 (ARQ) | 비상태 | Fly app |
 | Postgres (pgvector) | 영속 데이터 + 벡터 인덱스 | 상태 | Fly Postgres |

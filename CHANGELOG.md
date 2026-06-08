@@ -74,6 +74,20 @@
 - mypy override에 `redis.*` 추가
 - 테스트 신규: redis publisher 1, status 3, SSE 라우터 등록 3, 워커 redis publisher 와이어링 1
 - ARCHITECTURE §6.3 🟢 갱신(프론트엔드 EventSource 클라이언트는 🟡 — apps/web 후속)
+- **apps/web 인프라**: TanStack Query 5, react-hook-form + zod, sonner 토스트, openapi-typescript 7 의존성 추가
+- shadcn cli로 `input`/`label`/`card`/`dialog`/`sonner` 컴포넌트 추가
+- `next.config.ts` rewrites `/api/* → NEXT_PUBLIC_API_BASE_URL/*` (same-origin 유지, CORS 회피)
+- `.env.example`: `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED`
+- `lib/api-types.ts`: openapi-typescript 생성물 커밋. `pnpm openapi:generate` 스크립트
+- API 클라이언트 `lib/api/{client,auth,jds}.ts`: AppError envelope → `ApiError`로 정규화
+- TanStack Query 훅 `lib/queries/{auth,jds}.ts`: `useMe`, `useLoginMutation`, `useRegisterMutation`, `useLogoutMutation`, `useJds`, `useJd`, `useCreateJdMutation`
+- `components/providers/query-provider.tsx`로 root layout에서 QueryClient 주입
+- 인증 페이지 `(auth)/{login,register}`: rhf+zod 폼 + 한국어 토스트
+- 보호 layout `(app)/layout.tsx`: `useMe` 401 → `/login` redirect, top-nav(사용자 이메일 + 로그아웃)
+- JD CRUD 페이지 `(app)/jds`(목록 + 다이얼로그 생성), `(app)/jds/[jdId]`(상세)
+- 루트 `/`는 `/jds`로 redirect → (app) 레이아웃 가드 처리
+- Playwright smoke 갱신: 로그인 페이지 폼 요소 렌더(백엔드 불필요)
+- `apps/web/README.md` 갱신: 환경변수·디렉토리·인증 흐름 문서화
 
 ## [0.0.1] - 2026-05-27
 

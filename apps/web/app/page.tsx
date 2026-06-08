@@ -1,10 +1,7 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8">
-      <h1 className="text-4xl font-semibold tracking-tight">Hello, saro-job</h1>
-      <p className="text-sm text-muted-foreground">
-        AI 이력서·JD 매칭과 맞춤형 면접 질문 자동 생성기 — 스캐폴딩 단계.
-      </p>
-    </main>
-  );
+import { redirect } from "next/navigation";
+
+// 루트 진입은 항상 보호된 영역으로 보낸다. (app) 레이아웃이 인증을 검증해
+// 미인증 시 /login으로 다시 리다이렉트한다.
+export default function Home(): never {
+  redirect("/jds");
 }

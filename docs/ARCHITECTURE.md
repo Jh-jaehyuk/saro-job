@@ -121,7 +121,7 @@ core
 
 | Port | 위치 | 1차 구현 | 잠재 구현 |
 |---|---|---|---|
-| `LLMClient` | `services/llm.py` | 인터페이스(Protocol) 🟢 · `OpenAIClient` 구현 🟡 | Anthropic, Gemini |
+| `LLMClient` | `services/llm.py` | 인터페이스(Protocol) 🟢 · `OpenAIClient` 구현 🟢 | Anthropic, Gemini |
 | `PDFExtractor` | `services/pdf.py` | 인터페이스(Protocol) 🟢 · `PdfplumberExtractor` 🟢(텍스트 PDF) · `TesseractFallback` 🟡(OCR PR) | AWS Textract, Document AI |
 | `ObjectStorage` | `services/storage.py` | `S3CompatStorage` (R2/MinIO 공용) 🟢 | 다른 S3 호환 백엔드 |
 
@@ -150,7 +150,7 @@ erDiagram
 | `Match` | id, jd_id, resume_id, overall_score, category_scores_json, grade, matched_keywords_json, missing_keywords_json | UNIQUE(jd_id, resume_id) 🟢 |
 | `InterviewQuestion` | id, match_id, question, question_type, order, edited_by_user | 사용자 편집 추적 🟢 |
 | `ResumeProcessingJob` | id, resume_id, jd_id, state, error_json, started_at, finished_at, step_state_json | ARQ 외부 상태 거울 🟢 |
-| `LlmCall` | id, purpose, model, prompt, response, tokens_in, tokens_out, latency_ms, cost_usd, created_at | 자체 관찰성 🟢 |
+| `LlmCall` | id, org_id, purpose, model, prompt, response, tokens_in, tokens_out, latency_ms, cost_usd, created_at | 자체 관찰성 + 조직별 일일 비용 한도 합산 🟢 |
 
 벡터: `Resume.embedding`, `JobDescription.embedding`은 `pgvector.Vector(1536)` (text-embedding-3-small). 인덱스는 `ivfflat (vector_cosine_ops)`. 컬럼·인덱스는 도입됨(🟢), 실제 임베딩 채우기는 파이프라인 PR에서.
 
@@ -235,7 +235,9 @@ sequenceDiagram
 - 잡은 시작 시 `ResumeProcessingJob.step_state_json`을 보고 완료된 단계는 skip → idempotent 재시도.
 - R2 객체 키는 `org_{org_id}/resume_{resume_id}.pdf`로 결정적. 재시도 중복 업로드 OK.
 
-**구현 상태**: 오케스트레이션 `app/tasks/process_resume.py:run_resume_pipeline` 🟢 — 단계별 트랜잭션·멱등(`step_state_json`)·LlmCall 기록·Match upsert·상/중 등급에서만 질문 생성·실패 시 `state="failed"`/`error_json`. 스코어링 `app/services/scoring.py`(순수, 코사인+키워드 가중합, 상≥0.75/중≥0.5/하) 🟢. `PdfplumberExtractor`(`app/services/pdf.py`) 🟢 — 텍스트 PDF에서 한+영 추출, 텍스트 부족 시 `PdfParseFailed`. `finalize` → ARQ `process_resume` enqueue 🟢(`app/services/resume_service.py` + `app/core/queue.py`의 lazy 풀). 워커는 PDF 어댑터 와이어링 완료 🟢. `ProgressPublisher` 인터페이스 🟢 + `NoopProgressPublisher` 기본, 실 Redis 발행 🟡(SSE PR). `OpenAIClient` 🟡(다음 어댑터 PR — VCR 카세트). Tesseract OCR 폴백 🟡(OCR PR). 현 단계 워커 실행은 parsed 단계까지만 성공하고 analyzed에서 `NotImplementedError`로 실패한다.
+**구현 상태**: 오케스트레이션 `app/tasks/process_resume.py:run_resume_pipeline` 🟢 — 단계별 트랜잭션·멱등(`step_state_json`)·LlmCall 기록·Match upsert·상/중 등급에서만 질문 생성·실패 시 `state="failed"`/`error_json`. 스코어링 `app/services/scoring.py`(순수, 코사인+키워드 가중합, 상≥0.75/중≥0.5/하) 🟢. `PdfplumberExtractor`(`app/services/pdf.py`) 🟢 — 텍스트 PDF에서 한+영 추출, 텍스트 부족 시 `PdfParseFailed`. `finalize` → ARQ `process_resume` enqueue 🟢(`app/services/resume_service.py` + `app/core/queue.py`의 lazy 풀). 워커는 PDF 어댑터 와이어링 완료 🟢. `ProgressPublisher` 인터페이스 🟢 + `NoopProgressPublisher` 기본, 실 Redis 발행 🟡(SSE PR). `OpenAIClient` 🟢 — `OPENAI_API_KEY`가 있으면 워커에 주입, 없으면 placeholder(analyzed에서 `NotImplementedError`). Tesseract OCR 폴백 🟡(OCR PR). JD 키워드·임베딩 추출 🟡 — 현재 `create_jd`가 `requirements_json={}`로 저장하므로 실제 점수가 나오려면 JD 분석 단계가 필요하다.
+
+**토큰 비용 안전장치** 🟢: (1) 기본 모델은 `gpt-4o-mini`/`text-embedding-3-small`, 가격표(`MODEL_PRICES_USD_PER_1M`)에 없는 모델은 기동 시 거절 (2) 입력 `LLM_MAX_INPUT_CHARS`·출력 `LLM_MAX_OUTPUT_TOKENS` 상한 (3) 같은 이력서를 다른 JD로 평가하면 `sections_json`/`embedding`을 재사용해 분석·임베딩 호출 생략 (4) 질문 생성 입력의 부족 키워드는 10개로 제한 (5) 조직별 일일(UTC) 비용 한도 `LLM_DAILY_BUDGET_USD_PER_ORG` — finalize에서 429 `LLM_BUDGET_EXCEEDED`, 워커는 각 LLM 호출 직전에 재확인.
 
 ### 6.3 SSE 진행률 구독  🟢
 

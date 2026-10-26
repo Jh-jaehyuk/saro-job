@@ -57,6 +57,18 @@ class PdfParseFailed(AppError):
     message_ko = "PDF에서 텍스트를 추출하지 못했습니다."
 
 
+class LlmBudgetExceeded(AppError):
+    code = "LLM_BUDGET_EXCEEDED"
+    http_status = status.HTTP_429_TOO_MANY_REQUESTS
+    message_ko = "오늘 사용할 수 있는 AI 분석 한도를 모두 사용했습니다. 내일 다시 시도해 주세요."
+
+
+class LlmResponseInvalid(AppError):
+    code = "LLM_RESPONSE_INVALID"
+    http_status = status.HTTP_502_BAD_GATEWAY
+    message_ko = "AI 분석 결과를 해석하지 못했습니다. 잠시 후 다시 시도해 주세요."
+
+
 def _app_error_payload(err: AppError) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "error": {

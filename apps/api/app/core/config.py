@@ -1,5 +1,6 @@
 """Application settings loaded from environment via pydantic-settings."""
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -44,6 +45,18 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_url: str = "http://localhost:8000/auth/google/callback"
+
+    # LLM (OpenAI). 키가 비어 있으면 워커는 placeholder 클라이언트로 동작한다.
+    openai_api_key: str = ""
+    # 단순 추출·분류 위주라 저렴한 모델이 기본값. 가격표(`services/llm.py`)에 있는 모델만 허용.
+    llm_chat_model: str = "gpt-4o-mini"
+    llm_embedding_model: str = "text-embedding-3-small"
+    # 입력 상한(문자 수). 초과분은 잘라서 보낸다 — 긴 이력서 한 건이 비용을 폭증시키지 않게.
+    llm_max_input_chars: int = 12_000
+    # 출력 상한(토큰). 구조화 응답은 이 안에 충분히 들어간다.
+    llm_max_output_tokens: int = 1_024
+    # 조직별 하루(UTC) LLM 비용 한도(USD). 0이면 한도 없음.
+    llm_daily_budget_usd_per_org: Decimal = Decimal("1.00")
 
 
 @lru_cache(maxsize=1)

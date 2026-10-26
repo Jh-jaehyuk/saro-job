@@ -1,6 +1,15 @@
 """Resume 업로드 라우터 통합 테스트. enqueue는 보류 상태이므로 잡 row만 검증."""
 
+import asyncio
+import uuid
+from decimal import Decimal
+
+import pytest
+from app.core.config import get_settings
+from app.models.llm_call import LlmCall
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from .conftest import FakeArqPool, authenticate
 
@@ -80,3 +89,47 @@ def test_finalize_cross_org_jd_returns_404(client: TestClient) -> None:
     resp = client.post(f"/resumes/{resume_id}/finalize", json={"jd_id": jd_id})
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "JD_NOT_FOUND"
+
+
+def test_finalize_rejects_when_daily_budget_exceeded(
+    client: TestClient, arq_pool: FakeArqPool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = authenticate(client, "hr@example.com")
+    jd_id = _create_jd(client)
+    resume_id = client.post("/resumes/upload-url", json={"filename": "c.pdf"}).json()["resume_id"]
+    _record_llm_spend(uuid.UUID(user["org_id"]), Decimal("1.00"))
+
+    monkeypatch.setenv("LLM_DAILY_BUDGET_USD_PER_ORG", "1.00")
+    get_settings.cache_clear()
+    try:
+        resp = client.post(f"/resumes/{resume_id}/finalize", json={"jd_id": jd_id})
+    finally:
+        get_settings.cache_clear()
+
+    assert resp.status_code == 429
+    assert resp.json()["error"]["code"] == "LLM_BUDGET_EXCEEDED"
+    assert arq_pool.calls == []
+
+
+def _record_llm_spend(org_id: uuid.UUID, cost: Decimal) -> None:
+    async def _insert() -> None:
+        engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+        try:
+            async with AsyncSession(engine) as session, session.begin():
+                session.add(
+                    LlmCall(
+                        org_id=org_id,
+                        purpose="resume_analysis",
+                        model="gpt-4o-mini",
+                        prompt="p",
+                        response="r",
+                        tokens_in=1,
+                        tokens_out=1,
+                        latency_ms=1,
+                        cost_usd=cost,
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_insert())

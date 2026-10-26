@@ -10,6 +10,10 @@
 ## [Unreleased]
 
 ### Added
+- `OpenAIClient` 어댑터(`app/services/llm.py`): Chat Completions(JSON Schema, strict=False + Pydantic 검증) + Embeddings, 가격표 기반 `cost_usd` 계산, 입력/출력 상한. `OPENAI_API_KEY`가 있으면 워커에 주입
+- 조직별 일일 LLM 비용 한도(`LLM_DAILY_BUDGET_USD_PER_ORG`, `app/services/llm_budget.py`): finalize 시 429 `LLM_BUDGET_EXCEEDED`, 워커는 LLM 호출 직전 재확인
+- `LlmCall.org_id` + Alembic 마이그레이션 `0004_llm_calls_org_id`
+- 파이프라인: 같은 이력서를 다른 JD로 평가할 때 분석·임베딩 재사용(LLM 호출 생략), 질문 생성 입력 키워드 10개 제한
 - Git Workflow 규칙 (브랜치 전략, Conventional Commits, 버전 태그) — `AGENTS.md §11`
 - `CHANGELOG.md` 초기화
 - `.github/pull_request_template.md` — 단일 PR 템플릿 (변경 유형/위험도/체크리스트)

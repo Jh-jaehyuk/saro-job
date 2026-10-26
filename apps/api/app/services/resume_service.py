@@ -11,11 +11,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import JobDescriptionNotFound, ResumeNotFound
 from app.core.queue import QUEUE_NAME
 from app.models.job_description import JobDescription
 from app.models.resume import Resume
 from app.models.resume_processing_job import ResumeProcessingJob
+from app.services import llm_budget
 from app.services.storage import ObjectStorage
 
 
@@ -66,6 +68,12 @@ async def finalize_resume(
     ).scalar_one_or_none()
     if existing is not None:
         return existing
+
+    # 오늘 한도를 이미 다 쓴 조직은 큐에 넣기 전에 거절(429) — 워커에서 실패시키는 것보다
+    # 사용자가 즉시 이유를 알 수 있다.
+    await llm_budget.ensure_within_budget(
+        session, org_id, get_settings().llm_daily_budget_usd_per_org
+    )
 
     job = ResumeProcessingJob(resume_id=resume_id, jd_id=jd_id, state="queued", step_state_json={})
     session.add(job)

@@ -7,10 +7,10 @@ Run locally with::
 The :class:`WorkerSettings` class is the ARQ convention for declaring
 registered job functions, the queue name, and the Redis connection.
 
-이 워커는 `process_resume` 잡을 등록하고 PDF 어댑터(`PdfplumberExtractor`)를 ctx에
-주입한다. LLMClient는 아직 placeholder이므로, 워커는 parsed 단계까지 처리한 뒤
-analyzed 단계에서 NotImplementedError로 실패한다 — OpenAIClient PR에서 LLM
-placeholder만 교체하면 end-to-end가 완성된다.
+이 워커는 `process_resume` 잡을 등록하고 PDF 어댑터(`PdfplumberExtractor`)와
+LLM 어댑터(`OpenAIClient`)를 ctx에 주입한다. `OPENAI_API_KEY`가 비어 있으면 LLM은
+placeholder로 남아, 워커는 parsed 단계까지 처리한 뒤 analyzed 단계에서
+NotImplementedError로 실패한다.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from app.core.db import AsyncSessionLocal
 from app.core.queue import QUEUE_NAME
 from app.core.sse import RedisProgressPublisher
 from app.schemas.llm import LlmUsage
+from app.services.llm import OpenAIClient
 from app.services.pdf import PdfplumberExtractor
 from app.services.storage import S3CompatStorage
 from app.tasks.ping import ping
@@ -33,15 +34,15 @@ from pydantic import BaseModel
 
 
 class _NotImplementedLLMClient:
-    """어댑터 PR 전까지 자리만 차지하는 스텁. 호출 시 명확히 실패."""
+    """OPENAI_API_KEY가 없을 때 자리만 차지하는 스텁. 호출 시 명확히 실패."""
 
     async def embed(self, text: str) -> tuple[list[float], LlmUsage]:
-        raise NotImplementedError("OpenAIClient not yet wired — adapter PR pending")
+        raise NotImplementedError("OPENAI_API_KEY not set")
 
     async def structured_completion(
         self, *, purpose: str, system: str, user: str, schema: type[BaseModel]
     ) -> tuple[BaseModel, LlmUsage]:
-        raise NotImplementedError("OpenAIClient not yet wired — adapter PR pending")
+        raise NotImplementedError("OPENAI_API_KEY not set")
 
 
 async def on_startup(ctx: dict[str, Any]) -> None:
@@ -52,7 +53,7 @@ async def on_startup(ctx: dict[str, Any]) -> None:
     ctx["storage"] = S3CompatStorage(settings)
     ctx["publisher"] = RedisProgressPublisher(redis_client)
     ctx["pdf"] = PdfplumberExtractor()
-    ctx["llm"] = _NotImplementedLLMClient()
+    ctx["llm"] = OpenAIClient(settings) if settings.openai_api_key else _NotImplementedLLMClient()
     ctx["_redis"] = redis_client  # 정리용 보관(다음 PR에서 on_shutdown 정리).
 
 

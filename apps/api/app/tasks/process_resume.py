@@ -4,6 +4,9 @@
 각 단계는 외부 호출(R2/LLM)을 트랜잭션 *밖*에서 하고, 결과 저장 + LlmCall + 상태
 갱신만 짧은 트랜잭션 안에서 commit한다(AGENTS §7). `step_state_json` 플래그로 완료
 단계를 skip하여 멱등 재시도를 보장한다.
+
+토큰 비용: 같은 이력서를 다른 JD로 다시 평가할 때는 이미 저장된 분석·임베딩을 재사용해
+LLM을 다시 부르지 않는다. 각 LLM 호출 전에 조직별 일일 한도를 확인한다.
 """
 
 from __future__ import annotations
@@ -11,11 +14,13 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.config import get_settings
 from app.core.sse import ProgressPublisher
 from app.models.interview_question import InterviewQuestion
 from app.models.job_description import JobDescription
@@ -24,7 +29,7 @@ from app.models.match import Match
 from app.models.resume import Resume
 from app.models.resume_processing_job import ResumeProcessingJob
 from app.schemas.llm import GeneratedQuestions, LlmUsage, ResumeAnalysis
-from app.services import scoring
+from app.services import llm_budget, scoring
 from app.services.llm import LLMClient
 from app.services.pdf import PDFExtractor
 from app.services.storage import ObjectStorage
@@ -37,9 +42,15 @@ _STEP_QUESTIONS = "questions"
 
 _QUESTION_GRADES = {"상", "중"}
 
+# 질문 생성 프롬프트에 넣는 부족 키워드 상한 — 질문 3~5개에 이 이상은 필요 없다.
+_MAX_MISSING_FOR_QUESTIONS = 10
 
-def _llm_call(purpose: str, prompt: str, response: str, usage: LlmUsage) -> LlmCall:
+
+def _llm_call(
+    org_id: uuid.UUID, purpose: str, prompt: str, response: str, usage: LlmUsage
+) -> LlmCall:
     return LlmCall(
+        org_id=org_id,
         purpose=purpose,
         model=usage.model,
         prompt=prompt,
@@ -74,7 +85,9 @@ async def run_resume_pipeline(
     pdf: PDFExtractor,
     llm: LLMClient,
     publisher: ProgressPublisher,
+    daily_budget_usd: Decimal = Decimal(0),
 ) -> None:
+    """`daily_budget_usd`: 조직별 일일 LLM 비용 한도. 0이면 한도 없음."""
     try:
         await _run_stages(
             session_factory,
@@ -84,6 +97,7 @@ async def run_resume_pipeline(
             pdf=pdf,
             llm=llm,
             publisher=publisher,
+            daily_budget_usd=daily_budget_usd,
         )
     except Exception as exc:
         async with session_factory() as session, session.begin():
@@ -103,7 +117,12 @@ async def _run_stages(
     pdf: PDFExtractor,
     llm: LLMClient,
     publisher: ProgressPublisher,
+    daily_budget_usd: Decimal,
 ) -> None:
+    async def ensure_budget() -> None:
+        async with session_factory() as session:
+            await llm_budget.ensure_within_budget(session, org_id, daily_budget_usd)
+
     # 시작 표시 + 현재까지 완료된 단계 플래그 로드.
     async with session_factory() as session, session.begin():
         job = await _get_job(session, resume_id, jd_id)
@@ -111,7 +130,9 @@ async def _run_stages(
             job.started_at = datetime.now(UTC)
         job.state = "processing"
         steps: dict[str, Any] = dict(job.step_state_json)
-        pdf_key = (await session.get_one(Resume, resume_id)).pdf_key
+        resume = await session.get_one(Resume, resume_id)
+        pdf_key = resume.pdf_key
+        org_id = resume.org_id
 
     # --- 1. PDF 파싱 (외부: R2 + 파서) ---
     if not steps.get(_STEP_PARSED):
@@ -127,7 +148,16 @@ async def _run_stages(
     # --- 2. 섹션/키워드 분석 (외부: LLM) ---
     if not steps.get(_STEP_ANALYZED):
         async with session_factory() as session:
-            parsed_text = (await session.get_one(Resume, resume_id)).parsed_text or ""
+            resume = await session.get_one(Resume, resume_id)
+            parsed_text = resume.parsed_text or ""
+            already_analyzed = resume.sections_json is not None
+    if not steps.get(_STEP_ANALYZED) and already_analyzed:
+        # 다른 JD 평가에서 이미 분석한 이력서 — LLM 재호출 없이 재사용.
+        async with session_factory() as session, session.begin():
+            await _mark_step(session, resume_id, jd_id, _STEP_ANALYZED)
+        await publisher.publish(jd_id, resume_id=resume_id, step=_STEP_ANALYZED, percent=40)
+    elif not steps.get(_STEP_ANALYZED):
+        await ensure_budget()
         analysis, usage = await llm.structured_completion(
             purpose="resume_analysis",
             system="이력서를 섹션/연락처/키워드로 구조화하라.",
@@ -142,7 +172,7 @@ async def _run_stages(
             }
             resume.contact_json = analysis.contact
             session.add(
-                _llm_call("resume_analysis", parsed_text, analysis.model_dump_json(), usage)
+                _llm_call(org_id, "resume_analysis", parsed_text, analysis.model_dump_json(), usage)
             )
             await _mark_step(session, resume_id, jd_id, _STEP_ANALYZED)
         await publisher.publish(jd_id, resume_id=resume_id, step=_STEP_ANALYZED, percent=40)
@@ -150,12 +180,20 @@ async def _run_stages(
     # --- 3. 임베딩 (외부: LLM) ---
     if not steps.get(_STEP_EMBEDDED):
         async with session_factory() as session:
-            parsed_text = (await session.get_one(Resume, resume_id)).parsed_text or ""
+            resume = await session.get_one(Resume, resume_id)
+            parsed_text = resume.parsed_text or ""
+            already_embedded = resume.embedding is not None
+    if not steps.get(_STEP_EMBEDDED) and already_embedded:
+        async with session_factory() as session, session.begin():
+            await _mark_step(session, resume_id, jd_id, _STEP_EMBEDDED)
+        await publisher.publish(jd_id, resume_id=resume_id, step=_STEP_EMBEDDED, percent=60)
+    elif not steps.get(_STEP_EMBEDDED):
+        await ensure_budget()
         vector, usage = await llm.embed(parsed_text)
         async with session_factory() as session, session.begin():
             resume = await session.get_one(Resume, resume_id)
             resume.embedding = vector
-            session.add(_llm_call("embed", parsed_text, "<embedding>", usage))
+            session.add(_llm_call(org_id, "embed", parsed_text, "<embedding>", usage))
             await _mark_step(session, resume_id, jd_id, _STEP_EMBEDDED)
         await publisher.publish(jd_id, resume_id=resume_id, step=_STEP_EMBEDDED, percent=60)
 
@@ -196,8 +234,9 @@ async def _run_stages(
             ).scalar_one()
             grade = match.grade
             match_id = match.id
-            missing = list(match.missing_keywords_json)
+            missing = list(match.missing_keywords_json)[:_MAX_MISSING_FOR_QUESTIONS]
         if grade in _QUESTION_GRADES:
+            await ensure_budget()
             questions, usage = await llm.structured_completion(
                 purpose="generate_questions",
                 system="부족 역량 기반 면접 질문을 생성하라.",
@@ -216,6 +255,7 @@ async def _run_stages(
                     )
                 session.add(
                     _llm_call(
+                        org_id,
                         "generate_questions",
                         json.dumps(missing, ensure_ascii=False),
                         questions.model_dump_json(),
@@ -253,4 +293,5 @@ async def process_resume(ctx: dict[str, Any], resume_id: str, jd_id: str) -> Non
         pdf=cast(PDFExtractor, ctx["pdf"]),
         llm=cast(LLMClient, ctx["llm"]),
         publisher=cast(ProgressPublisher, ctx["publisher"]),
+        daily_budget_usd=get_settings().llm_daily_budget_usd_per_org,
     )

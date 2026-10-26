@@ -7,10 +7,12 @@ real postgres에서 검증한다. 실 어댑터 end-to-end는 어댑터 PR.
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
+from decimal import Decimal
 
 import pytest
 import pytest_asyncio
 from app.core.config import get_settings
+from app.core.exceptions import LlmBudgetExceeded
 from app.models.interview_question import InterviewQuestion
 from app.models.job_description import JobDescription
 from app.models.llm_call import LlmCall
@@ -269,3 +271,119 @@ async def test_pipeline_publishes_progress(
     )
     steps = [e[2] for e in publisher.events]
     assert steps == ["parsed", "analyzed", "embedded", "scored", "done"]
+
+
+async def _run_default(
+    factory: async_sessionmaker[AsyncSession],
+    resume_id: uuid.UUID,
+    jd_id: uuid.UUID,
+    llm: FakeLLMClient,
+    **kwargs: object,
+) -> None:
+    await run_resume_pipeline(
+        factory,
+        resume_id=resume_id,
+        jd_id=jd_id,
+        storage=FakeStorage(),
+        pdf=FakePDFExtractor(),
+        llm=llm,
+        publisher=RecordingProgressPublisher(),
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_records_org_id_on_llm_calls(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    resume_id, jd_id = await _seed(
+        session_factory, jd_keywords=["python", "fastapi"], jd_embedding=[1.0] + [0.0] * 1535
+    )
+    await _run_default(session_factory, resume_id, jd_id, FakeLLMClient())
+
+    async with session_factory() as s:
+        org_id = (await s.get_one(Resume, resume_id)).org_id
+        llm_calls = (await s.execute(select(LlmCall))).scalars().all()
+    assert llm_calls and all(c.org_id == org_id for c in llm_calls)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_reuses_resume_analysis_for_second_jd(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    resume_id, jd_id = await _seed(
+        session_factory, jd_keywords=["python", "fastapi"], jd_embedding=[1.0] + [0.0] * 1535
+    )
+    await _run_default(session_factory, resume_id, jd_id, FakeLLMClient())
+
+    # 같은 이력서를 두 번째 JD로 평가.
+    async with session_factory() as session, session.begin():
+        org_id = (await session.get_one(Resume, resume_id)).org_id
+        jd2 = JobDescription(
+            org_id=org_id,
+            title="JD2",
+            raw_text="...",
+            requirements_json={"keywords": ["python"]},
+            embedding=[1.0] + [0.0] * 1535,
+        )
+        session.add(jd2)
+        await session.flush()
+        session.add(
+            ResumeProcessingJob(
+                resume_id=resume_id, jd_id=jd2.id, state="queued", step_state_json={}
+            )
+        )
+        jd2_id = jd2.id
+
+    llm = FakeLLMClient()
+    await _run_default(session_factory, resume_id, jd2_id, llm)
+
+    # 분석·임베딩은 재사용 — 질문 생성만 새로 호출.
+    assert llm.completion_calls == ["generate_questions"]
+    assert llm.embed_calls == 0
+    async with session_factory() as s:
+        match = (
+            await s.execute(
+                select(Match).where(Match.resume_id == resume_id, Match.jd_id == jd2_id)
+            )
+        ).scalar_one()
+    assert match.grade == "상"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_stops_when_daily_budget_exceeded(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    resume_id, jd_id = await _seed(
+        session_factory, jd_keywords=["python"], jd_embedding=[1.0] + [0.0] * 1535
+    )
+    async with session_factory() as session, session.begin():
+        org_id = (await session.get_one(Resume, resume_id)).org_id
+        session.add(
+            LlmCall(
+                org_id=org_id,
+                purpose="resume_analysis",
+                model="gpt-4o-mini",
+                prompt="p",
+                response="r",
+                tokens_in=1,
+                tokens_out=1,
+                latency_ms=1,
+                cost_usd=Decimal("1.00"),
+            )
+        )
+
+    llm = FakeLLMClient()
+    with pytest.raises(LlmBudgetExceeded):
+        await _run_default(session_factory, resume_id, jd_id, llm, daily_budget_usd=Decimal("1.00"))
+
+    assert llm.completion_calls == []
+    async with session_factory() as s:
+        job = (
+            await s.execute(
+                select(ResumeProcessingJob).where(ResumeProcessingJob.resume_id == resume_id)
+            )
+        ).scalar_one()
+    assert job.state == "failed"
+    assert job.error_json is not None
+    assert job.error_json["type"] == "LlmBudgetExceeded"
